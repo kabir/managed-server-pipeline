@@ -9,7 +9,8 @@ spec:
       persistentVolumeClaim:
         claimName: maven-source-pvc
     - name: maven-settings
-      emptyDir: {}
+      configMap:
+        name: custom-maven-settings
   pipelineRef:
     name: managed-server-application
   params:
