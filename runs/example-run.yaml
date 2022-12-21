@@ -1,0 +1,22 @@
+apiVersion: tekton.dev/v1beta1
+kind: PipelineRun
+metadata:
+  generateName: example-run
+spec:
+  workspaces:
+    - name: shared-workspace
+      subPath: sources
+      persistentVolumeClaim:
+        claimName: maven-source-pvc
+    - name: maven-settings
+      emptyDir: {}
+  pipelineRef:
+    name: managed-server-application
+  params:
+    - name: git-url
+      value: https://github.com/kabir/managed-wildfly-deployments.git
+#    - name: git-revision
+#      default: ""
+    - name: context-dir
+      value: simple
+

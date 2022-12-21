@@ -1,0 +1,50 @@
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+  name: managed-server-application
+spec:
+  workspaces:
+    - name: shared-workspace
+  params:
+    - name: git-url
+    - name: git-revision
+      default: ""
+    - name: context-dir
+      default: ""
+  tasks:
+    - name: fetch-repository
+      taskRef:
+        name: git-clone
+        kind: ClusterTask
+      workspaces:
+        - name: output
+          workspace: shared-workspace
+      params:
+        - name: url
+          value: $(params.git-url)
+#        - name: subdirectory
+#          value: "source"
+        - name: deleteExisting
+          value: true
+        - name: revision
+          value: $(params.git-revision)
+    - name: maven-build
+      taskRef:
+        name: maven
+        kind: ClusterTask
+      runAfter:
+        - fetch-repository
+      params:
+        - name: CONTEXT_DIR
+          value: $(params.context-dir)
+        - name: GOALS
+          value:
+            - -B
+            - -DskipTests
+            - clean
+            - package
+      workspaces:
+        - name: source
+          workspace: shared-workspace
+        - name: maven-settings
+          workspace: shared-workspace
