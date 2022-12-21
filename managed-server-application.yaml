@@ -48,3 +48,33 @@ spec:
           workspace: shared-workspace
         - name: maven-settings
           workspace: shared-workspace
+    # Debug contents of workspace directory
+    - name: temp-check-directory
+      runAfter:
+        - maven-build
+      params:
+        - name: context-dir
+          value: $(params.context-dir)
+      workspaces:
+        - name: deployment
+          workspace: shared-workspace
+      taskSpec:
+        params:
+          - name: context-dir
+        workspaces:
+          - name: deployment
+            description: The workspace to create the readme file in
+        steps:
+          - name: check-directory
+            env:
+              - name: WORKSPACE_DEPLOYMENT_PATH
+                value: $(workspaces.deployment.path)
+              - name: WORKSPACE_DEPLOYMENT_CONTEXT_DIR
+                value: $(params.context-dir)
+            image: ubuntu
+            script: |
+              echo "${WORKSPACE_DEPLOYMENT_PATH} contents"
+              ls "${WORKSPACE_DEPLOYMENT_PATH}"
+              echo "${WORKSPACE_DEPLOYMENT_PATH}/${WORKSPACE_DEPLOYMENT_CONTEXT_DIR} contents"
+              ls "${WORKSPACE_DEPLOYMENT_PATH}/${WORKSPACE_DEPLOYMENT_CONTEXT_DIR}"
+    # Debug - END
