@@ -8,6 +8,10 @@ spec:
       subPath: sources
       persistentVolumeClaim:
         claimName: maven-source-pvc
+    - name: provisioned-server
+      subPath: server
+      persistentVolumeClaim:
+        claimName: maven-source-pvc
     - name: maven-settings
       emptyDir: {}
   pipelineRef:
@@ -19,4 +23,16 @@ spec:
 #      default: ""
     - name: context-dir
       value: simple
+    - name: server-feature-pack-ga
+      value: org.wildfly:wildfly-galleon-pack
+    - name: server-feature-pack-version
+      value: 27.0.0.Final
+    - name: cloud-feature-pack-ga
+      value: org.wildfly.cloud:wildfly-cloud-galleon-pack
+    - name: cloud-feature-pack-version
+      value: 2.0.0.Final
+    - name: datasources-feature-pack-ga
+      value: org.wildfly:wildfly-datasources-galleon-pack
+    - name: datasources-feature-pack-version
+      value: 3.0.0.Final
 

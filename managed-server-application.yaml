@@ -5,11 +5,30 @@ metadata:
 spec:
   workspaces:
     - name: shared-workspace
+    - name: provisioned-server
   params:
     - name: git-url
     - name: git-revision
       default: ""
     - name: context-dir
+      default: ""
+    - name: server-feature-pack-ga
+      type: string
+      default: ""
+    - name: server-feature-pack-version
+      type: string
+      default: ""
+    - name: cloud-feature-pack-ga
+      type: string
+      default: ""
+    - name: cloud-feature-pack-version
+      type: string
+      default: ""
+    - name: datasources-feature-pack-ga
+      type: string
+      default: ""
+    - name: datasources-feature-pack-version
+      type: string
       default: ""
   tasks:
     - name: fetch-repository
@@ -28,6 +47,7 @@ spec:
           value: true
         - name: revision
           value: $(params.git-revision)
+
     - name: maven-build
       taskRef:
         name: maven
@@ -41,6 +61,7 @@ spec:
           value:
             - -B
             - -DskipTests
+            - -Dmaven.source.skip
             - clean
             - package
       workspaces:
@@ -78,3 +99,120 @@ spec:
               echo "${WORKSPACE_DEPLOYMENT_PATH}/${WORKSPACE_DEPLOYMENT_CONTEXT_DIR} contents"
               ls "${WORKSPACE_DEPLOYMENT_PATH}/${WORKSPACE_DEPLOYMENT_CONTEXT_DIR}"
     # Debug - END
+    - name: provision-server
+      runAfter:
+        - maven-build
+      params:
+        - name: context-dir
+          value: $(params.context-dir)
+        - name: server-feature-pack-ga
+          value: $(params.server-feature-pack-ga)
+        - name: server-feature-pack-version
+          value: $(params.server-feature-pack-version)
+        - name: cloud-feature-pack-ga
+          value: $(params.cloud-feature-pack-ga)
+        - name: cloud-feature-pack-version
+          value: $(params.cloud-feature-pack-version)
+        - name: datasources-feature-pack-ga
+          value: $(params.datasources-feature-pack-ga)
+        - name: datasources-feature-pack-version
+          value: $(params.datasources-feature-pack-version)
+      workspaces:
+        - name: deployment
+          workspace: shared-workspace
+        - name: provisioned-server
+          workspace: provisioned-server
+      taskSpec:
+        params:
+          - name: context-dir
+            type: string
+            default: ""
+          - name: server-feature-pack-ga
+            type: string
+            default: ""
+          - name: server-feature-pack-version
+            type: string
+            default: ""
+          - name: cloud-feature-pack-ga
+            type: string
+            default: ""
+          - name: cloud-feature-pack-version
+            type: string
+            default: ""
+          - name: datasources-feature-pack-ga
+            type: string
+            default: ""
+          - name: datasources-feature-pack-version
+            type: string
+            default: ""
+        workspaces:
+          - name: deployment
+            description: The workspace containing the applicaton
+          - name: provisioned-server
+            description: The workspace to hold the provisioned server
+        steps:
+          - name: provision-server
+            env:
+              - name: MANAGED_SERVER_SERVER_FEATURE_PACK_GA
+                value: $(params.server-feature-pack-ga)
+              - name: MANAGED_SERVER_SERVER_FEATURE_PACK_VERSION
+                value: $(params.server-feature-pack-version)
+              - name: MANAGED_SERVER_CLOUD_FEATURE_PACK_GA
+                value: $(params.cloud-feature-pack-ga)
+              - name: MANAGED_SERVER_CLOUD_FEATURE_PACK_VERSION
+                value: $(params.cloud-feature-pack-version)
+              - name: MANAGED_SERVER_DATASOURCES_FEATURE_PACK_GA
+                value: $(params.datasources-feature-pack-ga)
+              - name: MANAGED_SERVER_DATASOURCES_FEATURE_PACK_VERSION
+                value: $(params.datasources-feature-pack-version)
+              # BASE_IMAGE_LAYERS is set when preparing the base builder image. We need to unset it here
+              # to perform a normal build. Noop for the empty builder image.
+              - name: BASE_IMAGE_LAYERS
+                value:
+              - name: WORKSPACE_DEPLOYMENT_PATH
+                value: $(workspaces.deployment.path)
+              - name: PROVISIONED_SERVER_PATH
+                value: $(workspaces.provisioned-server.path)
+              - name: WORKSPACE_DEPLOYMENT_CONTEXT_DIR
+                value: $(params.context-dir)
+            image: quay.io/kabirk/wildfly-managed-server-jdk17:latest
+            script: |
+              #!/usr/bin/env sh
+              set -eu
+
+              # Copy the war where it is expected by the image
+              # TODO the extracted server-config.xml. server-init.yml and server-init.cli files
+              #echo "S2I_SOURCE_DIR ${S2I_SOURCE_DIR}"
+              srcDir="${WORKSPACE_DEPLOYMENT_PATH}"
+              if [ -n "${WORKSPACE_DEPLOYMENT_CONTEXT_DIR}" ]; then
+                  srcDir="${srcDir}/${WORKSPACE_DEPLOYMENT_CONTEXT_DIR}"
+              fi
+              srcDir="${srcDir}/target"
+              echo "Found dir: ${srcDir}"
+              ls -al "${srcDir}"
+              echo "Looking for ${srcDir}/ROOT.war"
+              ls "${srcDir}/ROOT.war"
+              
+              export S2I_SOURCE_DIR=/tmp/src
+              mkdir -p "${S2I_SOURCE_DIR}"
+
+              # TODO Wildcards don't work....              
+              #echo "Looking for ${srcDir}/*.war"
+              #ls "${srcDir}/*.war"
+              #cp "${srcDir}/*.war" "${S2I_SOURCE_DIR}"
+
+              cp "${srcDir}/ROOT.war" "${S2I_SOURCE_DIR}"
+              
+              echo "---> /tmp:"
+              ls -al /tmp
+              echo "---> /tmp/src:"
+              ls -al /tmp/src
+              
+                                
+              # Invoke the image entry point
+              /usr/local/s2i/assemble
+
+              # TODO copy out the server
+
+
+              
