@@ -196,23 +196,19 @@ spec:
               export S2I_SOURCE_DIR=/tmp/src
               mkdir -p "${S2I_SOURCE_DIR}"
 
-              # TODO Wildcards don't work....              
+              # TODO Wildcards don't work....  Figure it out or specify name            
               #echo "Looking for ${srcDir}/*.war"
               #ls "${srcDir}/*.war"
               #cp "${srcDir}/*.war" "${S2I_SOURCE_DIR}"
-
+              # Hardcode the name of the archive for now
               cp "${srcDir}/ROOT.war" "${S2I_SOURCE_DIR}"
-              
-              echo "---> /tmp:"
-              ls -al /tmp
-              echo "---> /tmp/src:"
-              ls -al /tmp/src
               
                                 
               # Invoke the image entry point
               /usr/local/s2i/assemble
 
-              # TODO copy out the server
+              # copy out the server
+              cp -rf "${JBOSS_HOME}" "${PROVISIONED_SERVER_PATH}"
 
 
               
