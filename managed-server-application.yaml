@@ -4,8 +4,8 @@ metadata:
   name: managed-server-application
 spec:
   workspaces:
-    - name: shared-workspace
-    - name: provisioned-server
+    - name: maven-workspace
+    - name: provisioned-server-workspace
   params:
     - name: git-url
     - name: git-revision
@@ -30,6 +30,12 @@ spec:
     - name: datasources-feature-pack-version
       type: string
       default: ""
+    - name: dockerRegistry
+      default: "image-registry.openshift-image-registry.svc:5000"
+    - name: namespace
+      default: "$(context.pipelineRun.namespace)"
+    - name: deploymentName
+
   tasks:
     - name: fetch-repository
       taskRef:
@@ -37,7 +43,7 @@ spec:
         kind: ClusterTask
       workspaces:
         - name: output
-          workspace: shared-workspace
+          workspace: maven-workspace
       params:
         - name: url
           value: $(params.git-url)
@@ -66,9 +72,9 @@ spec:
             - package
       workspaces:
         - name: source
-          workspace: shared-workspace
+          workspace: maven-workspace
         - name: maven-settings
-          workspace: shared-workspace
+          workspace: maven-workspace
     # Debug contents of workspace directory
     - name: temp-check-directory
       runAfter:
@@ -78,7 +84,7 @@ spec:
           value: $(params.context-dir)
       workspaces:
         - name: deployment
-          workspace: shared-workspace
+          workspace: maven-workspace
       taskSpec:
         params:
           - name: context-dir
@@ -119,9 +125,9 @@ spec:
           value: $(params.datasources-feature-pack-version)
       workspaces:
         - name: deployment
-          workspace: shared-workspace
-        - name: provisioned-server
-          workspace: provisioned-server
+          workspace: maven-workspace
+        - name: provisioned-server-workspace
+          workspace: provisioned-server-workspace
       taskSpec:
         params:
           - name: context-dir
@@ -145,10 +151,15 @@ spec:
           - name: datasources-feature-pack-version
             type: string
             default: ""
+        results:
+          - name: dockerFile
+            description: The generated docker file path.
+          - name: dockerBuildContext
+            description: The path of the build context.
         workspaces:
           - name: deployment
             description: The workspace containing the applicaton
-          - name: provisioned-server
+          - name: provisioned-server-workspace
             description: The workspace to hold the provisioned server
         steps:
           - name: provision-server
@@ -172,7 +183,7 @@ spec:
               - name: WORKSPACE_DEPLOYMENT_PATH
                 value: $(workspaces.deployment.path)
               - name: PROVISIONED_SERVER_PATH
-                value: $(workspaces.provisioned-server.path)
+                value: $(workspaces.provisioned-server-workspace.path)
               - name: WORKSPACE_DEPLOYMENT_CONTEXT_DIR
                 value: $(params.context-dir)
             image: quay.io/kabirk/wildfly-managed-server-jdk17:latest
@@ -208,7 +219,68 @@ spec:
               /usr/local/s2i/assemble
 
               # copy out the server
-              cp -rf "${JBOSS_HOME}" "${PROVISIONED_SERVER_PATH}"
+              # mv -rf "${JBOSS_HOME}" "${PROVISIONED_SERVER_PATH}"
 
 
+              # Generate Dockerfile file and create docker build context
+              # To be consumed by task that does docker build (kaniko, buildah,...)
+              dockerDirName="docker-build"
+              dockerFileName="Dockerfile"
+              dockerBuildContext="${PROVISIONED_SERVER_PATH}/$dockerDirName"
+              dockerFile="$dockerBuildContext/$dockerFileName"
+              mkdir -p "$dockerBuildContext"
+              cp -rf "$JBOSS_HOME" "$dockerBuildContext"
+              cat <<EOF > "$dockerFile"
+              FROM quay.io/wildfly/wildfly-runtime:latest
+              COPY server \$JBOSS_HOME
+              USER root
+              RUN chown -R jboss:root \$JBOSS_HOME && chmod -R ug+rwX \$JBOSS_HOME
+              USER jboss
+              EOF
               
+              # The paths are relative to the provisioned-server-workspace.
+              echo -n "$dockerDirName/$dockerFileName" > $(results.dockerFile.path)
+              echo -n "$dockerDirName" > $(results.dockerBuildContext.path)
+        
+              # copy out the server
+              #mkdir -p "${dockerBuildContext}/server"
+              #cp -rf "${JBOSS_HOME}" "${dockerBuildContext}/server"
+              
+              ls -al "$dockerBuildContext"
+
+
+    - name: buildah-build
+      runAfter:
+        - provision-server
+      taskRef:
+        name: buildah
+        kind: ClusterTask
+      params:
+        - name: IMAGE
+          value: "$(params.dockerRegistry)/$(params.namespace)/$(params.deploymentName)"
+        - name: DOCKERFILE
+          value: "$(tasks.provision-server.results.dockerFile)"
+        - name: CONTEXT
+          value: "$(tasks.provision-server.results.dockerBuildContext)"
+        - name: TLSVERIFY
+          value: "false"
+      workspaces:
+        - name: source
+          workspace: provisioned-server-workspace
+    - name: deploy
+      taskRef:
+        name: openshift-client
+        kind: ClusterTask
+      runAfter:
+        - buildah-build
+#      when:
+#        - input: "$(params.deploy)"
+#          operator: in
+#          values: ["true"]
+      params:
+        - name: SCRIPT
+          value: |
+            oc new-app --docker-image $(params.dockerRegistry)/$(params.namespace)/$(params.deploymentName) || true
+            oc expose service/$(params.deploymentName) || true
+
+

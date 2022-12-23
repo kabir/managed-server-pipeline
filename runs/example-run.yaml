@@ -4,11 +4,11 @@ metadata:
   generateName: example-run
 spec:
   workspaces:
-    - name: shared-workspace
+    - name: maven-workspace
       subPath: sources
       persistentVolumeClaim:
         claimName: maven-source-pvc
-    - name: provisioned-server
+    - name: provisioned-server-workspace
       subPath: server
       persistentVolumeClaim:
         claimName: maven-source-pvc
@@ -35,4 +35,6 @@ spec:
       value: org.wildfly:wildfly-datasources-galleon-pack
     - name: datasources-feature-pack-version
       value: 3.0.0.Final
+    - name: deploymentName
+      value: kabir-test
 
