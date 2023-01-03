@@ -50,7 +50,7 @@ spec:
 #        - name: subdirectory
 #          value: "source"
         - name: deleteExisting
-          value: true
+          value: "true"
         - name: revision
           value: $(params.git-revision)
 
