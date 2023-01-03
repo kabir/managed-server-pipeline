@@ -207,7 +207,7 @@ spec:
               export S2I_SOURCE_DIR=/tmp/src
               mkdir -p "${S2I_SOURCE_DIR}"
 
-              # TODO Wildcards don't work....  Figure it out or specify name            
+              # TODO Wildcards don't work....  Figure it out or make user specify name            
               #echo "Looking for ${srcDir}/*.war"
               #ls "${srcDir}/*.war"
               #cp "${srcDir}/*.war" "${S2I_SOURCE_DIR}"
@@ -241,13 +241,11 @@ spec:
               # The paths are relative to the provisioned-server-workspace.
               echo -n "$dockerDirName/$dockerFileName" > $(results.dockerFile.path)
               echo -n "$dockerDirName" > $(results.dockerBuildContext.path)
-        
-              # copy out the server
-              #mkdir -p "${dockerBuildContext}/server"
-              #cp -rf "${JBOSS_HOME}" "${dockerBuildContext}/server"
+    
+              # Put the deployment into the server for now
+              cp "${srcDir}/ROOT.war" "${dockerBuildContext}/server/standalone/deployments/"
               
               ls -al "$dockerBuildContext"
-
 
     - name: buildah-build
       runAfter:
@@ -267,6 +265,8 @@ spec:
       workspaces:
         - name: source
           workspace: provisioned-server-workspace
+
+
     - name: deploy
       taskRef:
         name: openshift-client
